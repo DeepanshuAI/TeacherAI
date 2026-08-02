@@ -34,9 +34,9 @@ const stats = [
 ];
 
 const recentTopics = [
-  { topic: "Python Functions", progress: 85, lastStudied: "2 hours ago" },
-  { topic: "React Hooks", progress: 60, lastStudied: "Yesterday" },
-  { topic: "SQL JOINs", progress: 40, lastStudied: "3 days ago" },
+  { topic: "Photosynthesis & Plant Biology", progress: 85, lastStudied: "2 hours ago" },
+  { topic: "Linear Equations in One Variable", progress: 60, lastStudied: "Yesterday" },
+  { topic: "Force and Pressure", progress: 40, lastStudied: "3 days ago" },
 ];
 
 export function DashboardOverview({ user }: DashboardOverviewProps) {
@@ -87,13 +87,15 @@ export function DashboardOverview({ user }: DashboardOverviewProps) {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-[var(--primary)] flex items-center justify-center glow-primary">
-                <Sparkles className="w-7 h-7 text-white" />
-              </div>
+              <img
+                src="/teacherAI.webp"
+                alt="TeacherAI"
+                className="w-14 h-14 rounded-2xl object-cover glow-primary"
+              />
               <div>
                 <div className="font-semibold text-lg mb-0.5">Start a new lesson</div>
                 <div className="text-sm text-[var(--muted-foreground)]">
-                  Tell your AI teacher what you want to learn
+                  Ask your Class 8 AI teacher any question in Math, Science, English, or Social Science
                 </div>
               </div>
             </div>

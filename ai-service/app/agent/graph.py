@@ -27,10 +27,8 @@ from app.agent.state import LessonPhase, TeacherState
 
 def _route_after_identify(state: TeacherState) -> str:
     """Route after level identification."""
-    if state.get("needs_clarification"):
-        return "clarify"
-    if state["student_level"] == "unknown":
-        return "identify_level"  # Keep asking
+    if state.get("needs_clarification") or state.get("student_level") == "unknown":
+        return END  # Pause execution so student can answer diagnostic question
     return "plan_lesson"
 
 
@@ -117,30 +115,20 @@ def build_teacher_graph() -> StateGraph:
             "clarify": "clarify",
             "identify_level": "identify_level",
             "plan_lesson": "plan_lesson",
+            END: END,
         },
     )
 
-    graph.add_edge("clarify", "identify_level")
-    graph.add_edge("plan_lesson", "explain")
-    graph.add_edge("explain", "example")
-    graph.add_edge("example", "practice")
-    graph.add_edge("practice", "evaluate")
-
-    graph.add_conditional_edges(
-        "evaluate",
-        _route_after_evaluate,
-        {
-            "explain": "explain",
-            "practice": "practice",
-            "explain_mistake": "explain_mistake",
-            "quiz": "quiz",
-        },
-    )
-
-    graph.add_edge("explain_mistake", "practice")
-    graph.add_edge("quiz", "summarize")
-    graph.add_edge("summarize", "assign_homework")
-    graph.add_edge("assign_homework", "update_memory")
+    graph.add_edge("clarify", END)
+    graph.add_edge("plan_lesson", END)
+    graph.add_edge("explain", END)
+    graph.add_edge("example", END)
+    graph.add_edge("practice", END)
+    graph.add_edge("evaluate", END)
+    graph.add_edge("explain_mistake", END)
+    graph.add_edge("quiz", END)
+    graph.add_edge("summarize", END)
+    graph.add_edge("assign_homework", END)
     graph.add_edge("update_memory", END)
 
     return graph

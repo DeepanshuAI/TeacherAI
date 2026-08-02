@@ -72,7 +72,7 @@ async def _stream_teacher_response(
 
     conn_str = _get_checkpointer_conn_str()
 
-    async with await psycopg.AsyncConnection.connect(conn_str) as conn:
+    async with await psycopg.AsyncConnection.connect(conn_str, autocommit=True) as conn:
         checkpointer = AsyncPostgresSaver(conn)
         await checkpointer.setup()
 
@@ -143,9 +143,23 @@ async def _stream_teacher_response(
             if kind == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    token = chunk.content
-                    full_response += token
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                    c = chunk.content
+                    if isinstance(c, str):
+                        token = c
+                    elif isinstance(c, list):
+                        parts = []
+                        for item in c:
+                            if isinstance(item, str):
+                                parts.append(item)
+                            elif isinstance(item, dict) and item.get("type") == "text":
+                                parts.append(item.get("text", ""))
+                        token = "".join(parts)
+                    else:
+                        token = str(c)
+
+                    if token:
+                        full_response += token
+                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
             elif kind == "on_chain_start" and name not in ("LangGraph", "__start__"):
                 current_node = name
@@ -212,7 +226,7 @@ async def get_session(
 ) -> dict:
     """Get the current state of a session."""
     conn_str = _get_checkpointer_conn_str()
-    async with await psycopg.AsyncConnection.connect(conn_str) as conn:
+    async with await psycopg.AsyncConnection.connect(conn_str, autocommit=True) as conn:
         checkpointer = AsyncPostgresSaver(conn)
         compiled_graph = await get_compiled_graph(checkpointer)
         state = await compiled_graph.aget_state(

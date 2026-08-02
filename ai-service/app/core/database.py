@@ -15,9 +15,9 @@ class Base(DeclarativeBase):
 def _get_async_url() -> str:
     url = settings.DATABASE_URL
     if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
     return url
 
 

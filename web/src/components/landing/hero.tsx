@@ -56,10 +56,12 @@ export function LandingHero() {
       {/* Nav */}
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-[var(--border)]">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/teacherAI.webp"
+              alt="TeacherAI Logo"
+              className="w-8 h-8 rounded-lg object-cover"
+            />
             <span
               className="font-display font-700 text-lg text-gradient"
               style={{ fontFamily: "var(--font-display)" }}
@@ -95,7 +97,7 @@ export function LandingHero() {
           <motion.div variants={itemVariants} className="mb-6">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-sm text-[var(--muted-foreground)] border border-[var(--glass-border)]">
               <Sparkles className="w-3.5 h-3.5 text-[var(--primary)]" />
-              Powered by GPT-4o + LangGraph
+              Intelligent AI School Tutor for Class 8 Students
             </span>
           </motion.div>
 
@@ -104,7 +106,7 @@ export function LandingHero() {
             className="text-5xl md:text-7xl font-display font-800 leading-tight mb-6"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            Learn anything with an AI that{" "}
+            Master Class 8 subjects with an AI that{" "}
             <span className="text-gradient">actually teaches</span>
           </motion.h1>
 
@@ -112,9 +114,8 @@ export function LandingHero() {
             variants={itemVariants}
             className="text-xl text-[var(--muted-foreground)] max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Not just Q&amp;A. TeacherAI identifies your level, creates a lesson plan,
-            explains step-by-step, quizzes you, and tracks your mastery — just like a
-            real human tutor.
+            Personalized learning for Mathematics, Science, English, Social Science, and Computer Science. 
+            TeacherAI adapts to your level, solves doubts step-by-step, generates quizzes, and helps with homework — like your own personal school teacher.
           </motion.p>
 
           <motion.div variants={itemVariants} className="flex items-center justify-center gap-4">
@@ -145,12 +146,14 @@ export function LandingHero() {
         >
           <div className="glass-strong rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-3 pb-3 border-b border-[var(--border)]">
-              <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
+              <img
+                src="/teacherAI.webp"
+                alt="TeacherAI Avatar"
+                className="w-8 h-8 rounded-full object-cover"
+              />
               <div>
                 <div className="text-sm font-semibold">TeacherAI</div>
-                <div className="text-xs text-[var(--muted-foreground)]">Teaching: Python Functions</div>
+                <div className="text-xs text-[var(--muted-foreground)]">Class 8 Science: Photosynthesis</div>
               </div>
               <div className="ml-auto flex gap-1">
                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -160,30 +163,34 @@ export function LandingHero() {
 
             {/* Teacher message */}
             <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex-shrink-0 flex items-center justify-center mt-1">
-                <Sparkles className="w-3 h-3 text-white" />
-              </div>
+              <img
+                src="/teacherAI.webp"
+                alt="TeacherAI"
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1"
+              />
               <div className="bubble-teacher px-4 py-3 text-sm leading-relaxed max-w-sm">
-                Before we dive in — have you ever written a function before, in any language?
+                Hello! Today we are learning how plants make their food. Have you ever wondered why leaves are green?
               </div>
             </div>
 
             {/* Student message */}
             <div className="flex gap-3 justify-end">
               <div className="bubble-user px-4 py-3 text-sm leading-relaxed max-w-sm">
-                I tried JavaScript once but I don't really understand what functions do
+                I know green leaves need sunlight, but how do they convert it into food?
               </div>
             </div>
 
             {/* Teacher response */}
             <div className="flex gap-3">
-              <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex-shrink-0 flex items-center justify-center mt-1">
-                <Sparkles className="w-3 h-3 text-white" />
-              </div>
+              <img
+                src="/teacherAI.webp"
+                alt="TeacherAI"
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1"
+              />
               <div className="bubble-teacher px-4 py-3 text-sm leading-relaxed max-w-sm">
-                That's a great starting point! Think of a function like a recipe. You write it once, and you can cook that dish anytime you want — just by calling its name.
+                Great question! Leaves contain a green pigment called <strong>chlorophyll</strong>. It captures sunlight and combines water from the roots with carbon dioxide from the air to make <strong>glucose</strong> (food) and oxygen.
                 <br /><br />
-                Does that analogy make sense so far?
+                What gas do plants release for us to breathe during this process?
               </div>
             </div>
 

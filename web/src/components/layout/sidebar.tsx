@@ -42,9 +42,11 @@ export function DashboardSidebar({ user }: SidebarProps) {
       {/* Logo */}
       <div className="p-6 border-b border-[var(--border)]">
         <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-[var(--primary)] flex items-center justify-center group-hover:scale-105 transition-transform">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="/teacherAI.webp"
+            alt="TeacherAI Logo"
+            className="w-9 h-9 rounded-xl object-cover group-hover:scale-105 transition-transform"
+          />
           <span
             className="font-display font-700 text-lg text-gradient"
             style={{ fontFamily: "var(--font-display)" }}

@@ -17,7 +17,7 @@ interface UploadItem {
 const INITIAL_FILES: UploadItem[] = [
   {
     id: "f-1",
-    name: "Python_Advanced_Decorators.pdf",
+    name: "Class8_Science_NCERT_Chapter2_Microorganisms.pdf",
     size: "2.4 MB",
     type: "PDF",
     uploadedAt: "Yesterday",
@@ -26,7 +26,7 @@ const INITIAL_FILES: UploadItem[] = [
   },
   {
     id: "f-2",
-    name: "Calculus_Notes_Chapter3.png",
+    name: "Maths_Class8_Linear_Equations_Worksheet.png",
     size: "1.1 MB",
     type: "Image (OCR)",
     uploadedAt: "3 days ago",

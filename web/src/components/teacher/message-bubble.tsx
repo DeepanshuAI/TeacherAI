@@ -33,9 +33,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       {/* Teacher avatar */}
       {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center flex-shrink-0 mt-1">
-          <Sparkles className="w-3.5 h-3.5 text-white" />
-        </div>
+        <img
+          src="/teacherAI.webp"
+          alt="TeacherAI Avatar"
+          className="w-8 h-8 rounded-full object-cover flex-shrink-0 mt-1 shadow-sm border border-[var(--border)]"
+        />
       )}
 
       <div

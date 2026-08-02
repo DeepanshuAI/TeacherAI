@@ -12,26 +12,33 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "TeacherAI — Your Personal AI Tutor",
+    default: "TeacherAI — Intelligent AI School Tutor for Class 8",
     template: "%s | TeacherAI",
   },
   description:
-    "Learn anything with your personal AI tutor that teaches step by step, adapts to your level, and tracks your progress.",
-  keywords: ["AI tutor", "online learning", "personalized education", "AI teacher"],
+    "Personalized AI school tutor for Class 8 students covering Mathematics, Science, English, Social Science, and Computer Science.",
+  keywords: ["Class 8 AI tutor", "school learning", "homework help", "AI teacher", "CBSE Class 8", "ICSE Class 8"],
   authors: [{ name: "TeacherAI" }],
   creator: "TeacherAI",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  icons: {
+    icon: "/teacherAI.webp",
+    shortcut: "/teacherAI.webp",
+    apple: "/teacherAI.webp",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
-    title: "TeacherAI — Your Personal AI Tutor",
-    description: "Learn anything with an AI that actually teaches, not just answers.",
+    title: "TeacherAI — Intelligent AI School Tutor for Class 8",
+    description: "Learn Class 8 subjects with a friendly AI tutor that explains step by step.",
     siteName: "TeacherAI",
+    images: [{ url: "/teacherAI.webp", width: 512, height: 512, alt: "TeacherAI Logo" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "TeacherAI",
-    description: "Your personal AI tutor",
+    title: "TeacherAI — Class 8 AI Tutor",
+    description: "Your friendly AI school teacher",
+    images: ["/teacherAI.webp"],
   },
   robots: {
     index: true,

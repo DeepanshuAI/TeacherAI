@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, field_validator
 
+from app.agent.nodes import _get_json_llm
 from app.agent.prompts import QUIZ_PROMPT, TEACHER_SYSTEM_PROMPT
 from app.core.config import settings
 from app.core.security import verify_user_token
@@ -73,12 +74,7 @@ async def generate_quiz(
     _auth=Depends(verify_user_token),
 ) -> dict:
     """Generate a set of quiz questions for a topic."""
-    llm = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        temperature=0.5,
-        api_key=settings.OPENAI_API_KEY,
-        response_format={"type": "json_object"},
-    )
+    llm = _get_json_llm()
 
     prompt = f"""Generate {request.count} quiz questions about "{request.topic}".
     
@@ -133,12 +129,7 @@ async def evaluate_answer(
     _auth=Depends(verify_user_token),
 ) -> QuizEvaluateResponse:
     """Evaluate a student's answer to a quiz question."""
-    llm = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        temperature=0.2,
-        api_key=settings.OPENAI_API_KEY,
-        response_format={"type": "json_object"},
-    )
+    llm = _get_json_llm()
 
     question_data = request.question
     q_type = question_data.get("type", "short_answer")

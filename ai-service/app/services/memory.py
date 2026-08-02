@@ -17,15 +17,14 @@ class StudentMemoryService:
 
     async def get_profile(self, user_id: str) -> dict:
         """Load student profile from Redis cache (or return defaults)."""
-        redis = get_redis()
-        key = f"student_profile:{user_id}"
-
-        cached = await redis.get(key)
-        if cached:
-            try:
+        try:
+            redis = get_redis()
+            key = f"student_profile:{user_id}"
+            cached = await redis.get(key)
+            if cached:
                 return json.loads(cached)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse cached profile", user_id=user_id)
+        except Exception as e:
+            logger.warning("Redis profile lookup fallback", user_id=user_id, error=str(e))
 
         # Return default profile for new students
         return {
@@ -41,21 +40,24 @@ class StudentMemoryService:
 
     async def update_profile(self, user_id: str, state: dict) -> None:
         """Persist updated profile to Redis after a session."""
-        redis = get_redis()
-        key = f"student_profile:{user_id}"
+        try:
+            redis = get_redis()
+            key = f"student_profile:{user_id}"
 
-        profile = {
-            "user_id": user_id,
-            "level": state.get("student_level", "unknown"),
-            "weak_topics": state.get("weak_topics", []),
-            "strong_topics": state.get("strong_topics", []),
-            "learning_speed": state.get("learning_speed", "average"),
-            "quiz_scores": state.get("quiz_results", []),
-            "completed_lessons": state.get("completed_lessons", []),
-        }
+            profile = {
+                "user_id": user_id,
+                "level": state.get("student_level", "unknown"),
+                "weak_topics": state.get("weak_topics", []),
+                "strong_topics": state.get("strong_topics", []),
+                "learning_speed": state.get("learning_speed", "average"),
+                "quiz_scores": state.get("quiz_results", []),
+                "completed_lessons": state.get("completed_lessons", []),
+            }
 
-        await redis.setex(key, PROFILE_TTL, json.dumps(profile))
-        logger.info("Student profile updated", user_id=user_id)
+            await redis.setex(key, PROFILE_TTL, json.dumps(profile))
+            logger.info("Student profile updated", user_id=user_id)
+        except Exception as e:
+            logger.warning("Redis profile update fallback", user_id=user_id, error=str(e))
 
     async def get_session_context(self, user_id: str, topic: str) -> Optional[str]:
         """Get a summary of the student's history with this topic for context injection."""

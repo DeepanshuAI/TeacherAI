@@ -33,9 +33,11 @@ export function ForgotPasswordForm() {
       className="glass-strong rounded-2xl p-8"
     >
       <div className="flex items-center gap-2 mb-8">
-        <div className="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center">
-          <Sparkles className="w-4 h-4 text-white" />
-        </div>
+        <img
+          src="/teacherAI.webp"
+          alt="TeacherAI Logo"
+          className="w-9 h-9 rounded-xl object-cover"
+        />
         <span
           className="font-display font-700 text-xl text-gradient"
           style={{ fontFamily: "var(--font-display)" }}

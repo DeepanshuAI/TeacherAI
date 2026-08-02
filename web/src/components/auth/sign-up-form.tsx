@@ -19,6 +19,7 @@ const passwordRequirements = [
 export function SignUpForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
 
@@ -76,9 +77,11 @@ export function SignUpForm() {
     >
       {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
-        <div className="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center">
-          <Sparkles className="w-4 h-4 text-white" />
-        </div>
+        <img
+          src="/teacherAI.webp"
+          alt="TeacherAI Logo"
+          className="w-9 h-9 rounded-xl object-cover"
+        />
         <span
           className="font-display font-700 text-xl text-gradient"
           style={{ fontFamily: "var(--font-display)" }}
@@ -222,6 +225,37 @@ export function SignUpForm() {
               );
             })}
           </div>
+        </div>
+
+        {/* Confirm Password — required by signUpSchema .refine() */}
+        <div>
+          <label className="block text-xs font-medium mb-1.5 text-[var(--foreground)]">
+            Confirm Password
+          </label>
+          <div className="relative">
+            <input
+              {...register("confirmPassword")}
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="••••••••"
+              className="w-full h-11 pl-4 pr-11 rounded-xl bg-[var(--background)] border border-[var(--border)] focus:border-[var(--primary)] focus:outline-none text-sm transition-colors"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors p-1"
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          {errors.confirmPassword && (
+            <p className="text-xs text-red-400 mt-1">
+              {errors.confirmPassword.message}
+            </p>
+          )}
         </div>
 
         <button

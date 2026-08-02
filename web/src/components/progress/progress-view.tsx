@@ -53,16 +53,16 @@ const scoreTrendData = [
 ];
 
 const strongTopics = [
-  { name: "Python Basics & Syntax", mastery: 95 },
-  { name: "Control Flow & Loops", mastery: 90 },
-  { name: "React Component Lifecycle", mastery: 85 },
-  { name: "Basic SQL Queries", mastery: 88 },
+  { name: "Mathematics — Linear Equations", mastery: 95 },
+  { name: "Science — Photosynthesis & Cell Structure", mastery: 92 },
+  { name: "English — Tenses & Active/Passive Voice", mastery: 88 },
+  { name: "Social Science — The Indian Constitution", mastery: 85 },
 ];
 
 const weakTopics = [
-  { name: "Async/Await & Promises", mastery: 45, recommendation: "Review Event Loop concepts" },
-  { name: "Python Decorators", mastery: 50, recommendation: "Practice higher-order functions" },
-  { name: "SQL JOIN Operations", mastery: 58, recommendation: "Try visual Venn diagram practice" },
+  { name: "Mathematics — Squares & Square Roots", mastery: 48, recommendation: "Practice prime factorization method for square roots" },
+  { name: "Science — Force & Pressure Formulas", mastery: 52, recommendation: "Review pressure formula P = F / A with sample numericals" },
+  { name: "Social Science — Natural Vegetation & Wildlife", mastery: 58, recommendation: "Re-read Chapter 3 Geography summary & map points" },
 ];
 
 export function ProgressView() {

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Central application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # --- Application ---
     ENVIRONMENT: Literal["development", "production", "test"] = "development"
-    SERVICE_SECRET: str = "change_this_internal_service_secret"
+    SERVICE_SECRET: str = "teacherai_internal_secret"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # --- Database ---
@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = "mock-key-for-development"
     OPENAI_MODEL: str = "gpt-4o"
     ANTHROPIC_API_KEY: str = ""
-    LLM_PROVIDER: Literal["openai", "anthropic"] = "openai"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GOOGLE_API_KEY: str = ""
+    LLM_PROVIDER: Literal["openai", "anthropic", "gemini"] = "gemini"
 
     # --- S3 Storage ---
     S3_ENDPOINT: str = "http://localhost:9000"
@@ -78,7 +81,13 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     try:
-        return Settings()
+        s = Settings()
+        import os
+        gemini_key = s.GEMINI_API_KEY or s.GOOGLE_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
+        if gemini_key:
+            os.environ["GEMINI_API_KEY"] = gemini_key
+            os.environ["GOOGLE_API_KEY"] = gemini_key
+        return s
     except Exception as e:
         print(f"❌ CRITICAL: AI Service Configuration Validation Failed!\n{e}", file=sys.stderr)
         raise SystemExit(1) from e

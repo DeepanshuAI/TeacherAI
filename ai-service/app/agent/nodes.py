@@ -13,6 +13,10 @@ from typing import Any
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except ImportError:
+    ChatGoogleGenerativeAI = None  # type: ignore
 
 from app.agent.prompts import (
     ASSIGN_HOMEWORK_PROMPT,
@@ -35,24 +39,82 @@ from app.core.config import settings
 logger = structlog.get_logger(__name__)
 
 
-def _get_llm(temperature: float = 0.7) -> ChatOpenAI:
-    """Get configured LLM instance."""
-    return ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        temperature=temperature,
-        api_key=settings.OPENAI_API_KEY,
-        streaming=True,
-    )
+def _get_llm(temperature: float = 0.7) -> Any:
+    """Get configured LLM instance based on LLM_PROVIDER setting."""
+    provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+    
+    if provider == "gemini":
+        if not ChatGoogleGenerativeAI:
+            raise RuntimeError("langchain-google-genai is not installed.")
+        model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash") or "gemini-3.6-flash"
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "GOOGLE_API_KEY", "")
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=temperature,
+            google_api_key=api_key,
+        )
+    elif provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model="claude-3-5-sonnet-20241022",
+            temperature=temperature,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+    else:
+        return ChatOpenAI(
+            model=settings.OPENAI_MODEL,
+            temperature=temperature,
+            api_key=settings.OPENAI_API_KEY,
+            streaming=True,
+        )
 
 
-def _get_json_llm() -> ChatOpenAI:
+def _get_json_llm() -> Any:
     """LLM instance for structured JSON output."""
-    return ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        temperature=0.3,
-        api_key=settings.OPENAI_API_KEY,
-        response_format={"type": "json_object"},
-    )
+    provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
+    
+    if provider == "gemini":
+        if not ChatGoogleGenerativeAI:
+            raise RuntimeError("langchain-google-genai is not installed.")
+        model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash") or "gemini-3.6-flash"
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "GOOGLE_API_KEY", "")
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=0.3,
+            google_api_key=api_key,
+        )
+    else:
+        return ChatOpenAI(
+            model=settings.OPENAI_MODEL,
+            temperature=0.3,
+            api_key=settings.OPENAI_API_KEY,
+            response_format={"type": "json_object"},
+        )
+
+
+def _extract_text(content: Any) -> str:
+    """Safely extract string text from response.content regardless of provider format."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text", ""))
+        return "".join(parts)
+    return str(content)
+
+
+def _format_messages_for_llm(messages: list) -> list:
+    """Ensure message history for LLM does not end with an AIMessage (required by Gemini)."""
+    cleaned = list(messages)
+    # Ensure system messages stay at front, but system + user/ai list doesn't end in AIMessage
+    # Find last index that is HumanMessage or SystemMessage
+    while len(cleaned) > 1 and isinstance(cleaned[-1], AIMessage):
+        cleaned.pop()
+    return cleaned
 
 
 async def node_identify_level(state: TeacherState) -> dict[str, Any]:
@@ -77,19 +139,20 @@ async def node_identify_level(state: TeacherState) -> dict[str, Any]:
         *state["messages"],
     ]
 
-    response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    response = await llm.ainvoke(_format_messages_for_llm(messages))
+    teacher_message = _extract_text(response.content)
 
     # Try to infer level from conversation
     inferred_level = _infer_level_from_conversation(state["messages"], state["topic"])
+    needs_more_info = messages_count < 3 or inferred_level == StudentLevel.UNKNOWN
 
     return {
         "messages": [AIMessage(content=teacher_message)],
         "last_teacher_message": teacher_message,
         "message_type": "text",
-        "student_level": inferred_level,
+        "student_level": inferred_level if not needs_more_info else StudentLevel.UNKNOWN,
         "current_phase": LessonPhase.IDENTIFY,
-        "needs_clarification": inferred_level == StudentLevel.UNKNOWN,
+        "needs_clarification": needs_more_info,
     }
 
 
@@ -106,7 +169,7 @@ async def node_clarify(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -140,7 +203,7 @@ async def node_plan_lesson(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     # Parse lesson plan from response
     lesson_plan = _parse_lesson_plan(teacher_message, state["topic"])
@@ -177,7 +240,7 @@ async def node_explain(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -210,7 +273,7 @@ async def node_example(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -243,7 +306,7 @@ async def node_practice(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -284,7 +347,7 @@ async def node_evaluate(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     # Determine if answer was correct based on response sentiment
     is_correct = _assess_correctness(teacher_message)
@@ -348,7 +411,7 @@ async def node_explain_mistake(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -391,9 +454,9 @@ async def node_quiz(state: TeacherState) -> dict[str, Any]:
 
     quiz_data = {}
     try:
-        quiz_data = json.loads(response.content)
+        quiz_data = json.loads(_extract_text(response.content))
     except json.JSONDecodeError:
-        logger.error("Failed to parse quiz JSON", response=response.content)
+        logger.error("Failed to parse quiz JSON", response=_extract_text(response.content))
         quiz_data = {
             "type": "short_answer",
             "question": f"In your own words, explain what you learned about {state['topic']} today.",
@@ -445,7 +508,7 @@ async def node_summarize(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -474,7 +537,7 @@ async def node_assign_homework(state: TeacherState) -> dict[str, Any]:
     ]
 
     response = await llm.ainvoke(messages)
-    teacher_message = response.content
+    teacher_message = _extract_text(response.content)
 
     return {
         "messages": [AIMessage(content=teacher_message)],
@@ -508,7 +571,7 @@ async def node_update_memory(state: TeacherState) -> dict[str, Any]:
 
     memory_update = {}
     try:
-        memory_update = json.loads(response.content)
+        memory_update = json.loads(_extract_text(response.content))
     except json.JSONDecodeError:
         logger.error("Failed to parse memory update JSON")
         memory_update = {

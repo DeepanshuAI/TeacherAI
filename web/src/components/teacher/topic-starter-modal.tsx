@@ -8,14 +8,14 @@ import { Sparkles, X, ArrowRight, BookOpen } from "lucide-react";
 import { startLessonSchema, type StartLessonInput } from "@/lib/validations";
 
 const SUGGESTED_TOPICS = [
-  "Python for beginners",
-  "React hooks",
-  "SQL fundamentals",
-  "Machine learning basics",
-  "JavaScript async/await",
-  "Linear algebra",
-  "Data structures",
-  "System design",
+  "Photosynthesis & Plant Biology",
+  "Linear Equations in One Variable",
+  "Force and Pressure",
+  "Cell Structure & Functions",
+  "Indian Constitution & Civics",
+  "Squares and Square Roots",
+  "English Grammar: Tenses & Voice",
+  "Crop Production & Management",
 ];
 
 interface TopicStarterModalProps {
@@ -60,13 +60,15 @@ export function TopicStarterModal({ onStart, onClose }: TopicStarterModalProps) 
         </button>
 
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-[var(--primary)] flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/teacherAI.webp"
+            alt="TeacherAI Logo"
+            className="w-10 h-10 rounded-xl object-cover"
+          />
           <div>
-            <h2 className="font-semibold text-lg">Start a new lesson</h2>
+            <h2 className="font-semibold text-lg">Start a Class 8 lesson</h2>
             <p className="text-sm text-[var(--muted-foreground)]">
-              What do you want to learn today?
+              What subject or topic do you want to learn today?
             </p>
           </div>
         </div>
@@ -76,7 +78,7 @@ export function TopicStarterModal({ onStart, onClose }: TopicStarterModalProps) 
             <input
               id="topic-input"
               type="text"
-              placeholder="e.g. Python decorators, Calculus derivatives, SQL JOINs..."
+              placeholder="e.g. Photosynthesis, Linear Equations, Cell Structure..."
               className="w-full px-4 py-3 rounded-xl bg-[var(--muted)] border border-[var(--border)] text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-all"
               autoFocus
               {...register("topic")}
