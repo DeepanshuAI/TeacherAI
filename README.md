@@ -2,6 +2,8 @@
 
 An intelligent, interactive AI tutoring platform built with **Next.js 15 (App Router)**, **FastAPI**, **LangGraph**, **PostgreSQL with pgvector**, **Redis**, and **Better Auth**.
 
+> 📖 **Complete Setup Guide:** For an in-depth step-by-step developer guide, environment variable explanations, database migrations, and OAuth setup, see [SETUP.md](file:///c:/Users/dell/OneDrive/Desktop/TeacherAI/SETUP.md).
+
 ---
 
 ## 🌟 Key Capabilities & Features
@@ -48,35 +50,38 @@ Python FastAPI Service (LangGraph StateGraph + PyMuPDF + Tesseract)
 
 ---
 
-## 🚀 Quick Start (Local Development with Docker)
-
-### Prerequisites
-- Docker Engine & Docker Compose
-- Node.js 20+ & Python 3.11+
-- OpenAI API Key
+## 🚀 Quick Start (Local Development)
 
 ### Step 1: Clone & Set Environment Variables
 ```bash
+git clone https://github.com/DeepanshuAI/TeacherAI.git
+cd TeacherAI
 cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY and BETTER_AUTH_SECRET
+cp web/.env.example web/.env
 ```
 
-### Step 2: Launch Dev Services (PostgreSQL + pgvector, Redis, MinIO)
+### Step 2: Install Web & AI Dependencies
 ```bash
-docker-compose up -d
+# Web frontend dependencies
+cd web
+npm install
+
+# AI service dependencies
+cd ../ai-service
+pip install uvicorn fastapi pydantic pydantic-settings langchain langchain-openai langchain-anthropic langgraph psycopg[binary,pool] redis python-jose python-multipart pymupdf pillow pytesseract httpx structlog tenacity boto3 botocore
 ```
 
 ### Step 3: Run Database Migrations
 ```bash
 cd web
 npx prisma db push
+npx prisma generate
 ```
 
 ### Step 4: Start AI Service (Python FastAPI)
 ```bash
 cd ai-service
-pip install -r pyproject.toml # or uv pip install
-uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 ### Step 5: Start Next.js Frontend
@@ -97,19 +102,4 @@ To build and launch the complete production stack (Web + AI Service + DB + Redis
 docker-compose -f docker-compose.prod.yml up --build -d
 ```
 
----
-
-## 🧪 Testing
-
-### Python AI Service Tests
-```bash
-cd ai-service
-pytest tests/ -v
-```
-
-### Next.js Type Check & Build Validation
-```bash
-cd web
-npx tsc --noEmit
-npm run build
-```
+For detailed configuration parameters, see [SETUP.md](file:///c:/Users/dell/OneDrive/Desktop/TeacherAI/SETUP.md).

@@ -24,7 +24,6 @@ model User {
 
   sessions       Session[]
   accounts       Account[]
-  verifications  Verification[]
   studentProfile StudentProfile?
   lessonSessions LessonSession[]
   quizAttempts   QuizAttempt[]
@@ -78,27 +77,25 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  user   User?   @relation(fields: [identifier], references: [email])
-
   @@index([identifier])
 }
 
 // ─── Student Learning Profile ─────────────────────────────────────────────────
 
 model StudentProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  level           String   @default("unknown") // beginner, intermediate, advanced
-  weakTopics      String[] @default([])
-  strongTopics    String[] @default([])
-  learningSpeed   String   @default("average")  // slow, average, fast
-  totalSessions   Int      @default(0)
-  totalMinutes    Int      @default(0)
-  currentStreak   Int      @default(0)
-  longestStreak   Int      @default(0)
-  lastSessionAt   DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  level         String    @default("unknown") // beginner, intermediate, advanced
+  weakTopics    String[]  @default([])
+  strongTopics  String[]  @default([])
+  learningSpeed String    @default("average") // slow, average, fast
+  totalSessions Int       @default(0)
+  totalMinutes  Int       @default(0)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastSessionAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -110,7 +107,7 @@ model StudentProfile {
 model LessonSession {
   id          String        @id @default(cuid())
   userId      String
-  threadId    String        @unique  // LangGraph thread_id
+  threadId    String        @unique // LangGraph thread_id
   topic       String
   status      SessionStatus @default(ACTIVE)
   phase       String        @default("identify_level")
@@ -118,136 +115,114 @@ model LessonSession {
   lessonPlan  Json?
   summary     String?
   startedAt   DateTime      @default(now())
-  completedAt DateTime?
-  updatedAt   DateTime      @updatedAt
+  endedAt     DateTime?
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages LessonMessage[]
 
   @@index([userId])
-  @@index([threadId])
-  @@index([userId, status])
+  @@index([status])
 }
 
-model Message {
-  id        String      @id @default(cuid())
+model LessonMessage {
+  id        String   @id @default(cuid())
   sessionId String
-  role      MessageRole
-  content   String
-  type      MessageType @default(TEXT)
+  role      String // user, assistant, system
+  content   String   @db.Text
+  phase     String?
   metadata  Json?
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   session LessonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
-  @@index([sessionId, createdAt])
 }
 
-// ─── Quiz System ──────────────────────────────────────────────────────────────
-
-model Quiz {
-  id           String       @id @default(cuid())
-  sessionId    String?
-  userId       String
-  topic        String
-  difficulty   String       // easy, medium, hard
-  questionType String       // mcq, true_false, fill_blank, short_answer, code
-  questions    Json         // array of question objects
-  createdAt    DateTime     @default(now())
-
-  attempts QuizAttempt[]
-
-  @@index([userId])
-  @@index([topic])
-}
+// ─── Quizzes & Assessments ────────────────────────────────────────────────────
 
 model QuizAttempt {
-  id          String   @id @default(cuid())
-  quizId      String
+  id          String    @id @default(cuid())
   userId      String
-  answers     Json     // array of {questionId, studentAnswer, isCorrect, score, feedback}
-  totalScore  Float    @default(0)
-  maxScore    Float    @default(0)
-  percentage  Float    @default(0)
-  timeTakenSec Int?
-  completedAt DateTime @default(now())
+  topic       String
+  score       Float
+  maxScore    Float     @default(100)
+  passed      Boolean
+  timeSpentSec Int
+  questions   Json // Snapshot of questions, options & user answers
+  feedback    String?   @db.Text
+  completedAt DateTime  @default(now())
 
-  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([quizId])
-  @@index([userId, completedAt])
 }
 
-// ─── Homework ─────────────────────────────────────────────────────────────────
+// ─── Homework & Practice Tasks ────────────────────────────────────────────────
 
 model Homework {
   id          String         @id @default(cuid())
   userId      String
-  sessionId   String?
-  topic       String
   title       String
-  description String
-  tasks       Json           // array of task objects
+  description String         @db.Text
+  topic       String
+  difficulty  String         @default("medium")
+  status      HomeworkStatus @default(ASSIGNED)
+  submission  String?        @db.Text
+  feedback    String?        @db.Text
+  score       Float?
   dueDate     DateTime?
-  status      HomeworkStatus @default(PENDING)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([userId, status])
+  @@index([status])
 }
 
-// ─── Achievements ─────────────────────────────────────────────────────────────
+// ─── Gamification & Achievements ──────────────────────────────────────────────
 
 model Achievement {
-  id          String  @id @default(cuid())
-  slug        String  @unique
+  id          String   @id @default(cuid())
+  slug        String   @unique // e.g., "first_lesson", "quiz_master"
   name        String
   description String
   icon        String
-  category    String
-  threshold   Int     @default(1)
+  points      Int      @default(10)
+  createdAt   DateTime @default(now())
 
-  userAchievements UserAchievement[]
+  users UserAchievement[]
 }
 
 model UserAchievement {
-  id            String      @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
   achievementId String
-  unlockedAt    DateTime    @default(now())
-  progress      Int         @default(0)
+  unlockedAt    DateTime @default(now())
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  achievement Achievement @relation(fields: [achievementId], references: [id])
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementId])
   @@index([userId])
 }
 
-// ─── File Uploads ─────────────────────────────────────────────────────────────
+// ─── Uploaded Knowledge Documents (RAG) ───────────────────────────────────────
 
 model UploadedFile {
-  id            String   @id @default(cuid())
-  userId        String
-  fileId        String   @unique
-  filename      String
-  mimeType      String
-  sizeBytes     Int
-  s3Key         String
-  textExtracted Boolean  @default(false)
-  chunkCount    Int      @default(0)
-  createdAt     DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageUrl String
+  chunkCount Int      @default(0)
+  vectorized Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([fileId])
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -259,26 +234,14 @@ enum UserRole {
 
 enum SessionStatus {
   ACTIVE
+  PAUSED
   COMPLETED
   ABANDONED
 }
 
-enum MessageRole {
-  USER
-  ASSISTANT
-  SYSTEM
-}
-
-enum MessageType {
-  TEXT
-  QUIZ
-  CODE
-  SUMMARY
-  HOMEWORK
-}
-
 enum HomeworkStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
+  ASSIGNED
+  SUBMITTED
+  GRADED
+  OVERDUE
 }

@@ -1,5 +1,6 @@
-"""Application configuration using Pydantic Settings."""
+"""Application configuration using Pydantic Settings with strict startup validation."""
 
+import sys
 from functools import lru_cache
 from typing import Literal
 
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # --- Database ---
-    DATABASE_URL: str = "postgresql+psycopg://teacherai:teacherai_secret@localhost:5432/teacherai_db"
+    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/teacherai_db"
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
 
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
 
     # --- S3 Storage ---
     S3_ENDPOINT: str = "http://localhost:9000"
+    S3_REGION: str = "us-east-1"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
     S3_BUCKET: str = "teacherai-uploads"
@@ -58,10 +60,28 @@ class Settings(BaseSettings):
                 return [origin.strip() for origin in v.split(",")]
         return v
 
+    @field_validator("SERVICE_SECRET")
+    @classmethod
+    def validate_service_secret(cls, v: str) -> str:
+        if not v or v.strip() == "":
+            raise ValueError("SERVICE_SECRET must not be empty.")
+        return v
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        if not v or not (v.startswith("postgresql://") or v.startswith("postgresql+psycopg://")):
+            raise ValueError("DATABASE_URL must be a valid PostgreSQL connection string starting with postgresql:// or postgresql+psycopg://")
+        return v
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    try:
+        return Settings()
+    except Exception as e:
+        print(f"❌ CRITICAL: AI Service Configuration Validation Failed!\n{e}", file=sys.stderr)
+        raise SystemExit(1) from e
 
 
 settings = get_settings()

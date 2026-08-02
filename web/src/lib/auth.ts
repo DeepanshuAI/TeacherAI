@@ -1,23 +1,25 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  secret: process.env.BETTER_AUTH_SECRET || "teacherai_super_secret_auth_token_32chars",
   plugins: [nextCookies()],
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false, // Set to true in production
+    requireEmailVerification: false,
+    autoSignIn: true,
   },
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      clientId: process.env.GOOGLE_CLIENT_ID || "dummy_id",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "dummy_secret",
+      enabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     },
   },
   session: {
@@ -30,10 +32,12 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
   ],
   rateLimit: {
     window: 60,
-    max: 20,
+    max: 100, // Generous limit for local development & testing
   },
 });
 
