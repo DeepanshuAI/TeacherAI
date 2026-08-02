@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: teacherai_prod_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-teacherai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-teacherai_db}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teacherai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: teacherai_prod_redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: teacherai_prod_ai_service
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://teacherai:${POSTGRES_PASSWORD}@postgres:5432/teacherai_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      SERVICE_SECRET: ${AI_SERVICE_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: teacherai_prod_web
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://teacherai:${POSTGRES_PASSWORD}@postgres:5432/teacherai_db
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${NEXT_PUBLIC_APP_URL}
+      AI_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET}
+    depends_on:
+      - ai-service
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+networks:
+  default:
+    name: teacherai_prod_network

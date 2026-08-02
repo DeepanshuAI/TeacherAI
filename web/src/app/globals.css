@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+/* ─── Google Fonts ─────────────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ─── Design Tokens ────────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Brand palette */
+  --color-brand-50: oklch(97% 0.02 270);
+  --color-brand-100: oklch(93% 0.05 270);
+  --color-brand-200: oklch(86% 0.10 270);
+  --color-brand-300: oklch(77% 0.15 270);
+  --color-brand-400: oklch(67% 0.20 270);
+  --color-brand-500: oklch(57% 0.24 270);
+  --color-brand-600: oklch(48% 0.22 270);
+  --color-brand-700: oklch(40% 0.18 270);
+  --color-brand-800: oklch(30% 0.13 270);
+  --color-brand-900: oklch(22% 0.08 270);
+
+  /* Accent — warm amber */
+  --color-accent-400: oklch(78% 0.18 65);
+  --color-accent-500: oklch(70% 0.20 65);
+  --color-accent-600: oklch(60% 0.19 65);
+
+  /* Success */
+  --color-success-400: oklch(72% 0.18 145);
+  --color-success-500: oklch(63% 0.20 145);
+
+  /* Error */
+  --color-error-400: oklch(65% 0.22 25);
+  --color-error-500: oklch(55% 0.24 25);
+}
+
+/* ─── CSS Variables (light / dark) ─────────────────────────────────── */
+:root {
+  --background: oklch(99% 0.003 270);
+  --foreground: oklch(15% 0.02 270);
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(15% 0.02 270);
+  --border: oklch(90% 0.01 270);
+  --muted: oklch(96% 0.005 270);
+  --muted-foreground: oklch(55% 0.02 270);
+  --primary: oklch(57% 0.24 270);
+  --primary-foreground: oklch(99% 0 0);
+  --secondary: oklch(93% 0.05 270);
+  --secondary-foreground: oklch(40% 0.18 270);
+  --ring: oklch(57% 0.24 270);
+
+  /* Glass effect */
+  --glass-bg: oklch(100% 0 0 / 0.7);
+  --glass-border: oklch(90% 0.01 270 / 0.6);
+  --glass-shadow: 0 8px 32px oklch(15% 0.02 270 / 0.08);
+
+  /* Chat */
+  --bubble-user: oklch(57% 0.24 270);
+  --bubble-teacher: oklch(97% 0.02 270);
+  --bubble-teacher-border: oklch(88% 0.05 270);
+}
+
+.dark {
+  --background: oklch(12% 0.02 270);
+  --foreground: oklch(95% 0.005 270);
+  --card: oklch(16% 0.025 270);
+  --card-foreground: oklch(95% 0.005 270);
+  --border: oklch(25% 0.03 270);
+  --muted: oklch(20% 0.025 270);
+  --muted-foreground: oklch(60% 0.02 270);
+  --primary: oklch(65% 0.24 270);
+  --primary-foreground: oklch(99% 0 0);
+  --secondary: oklch(22% 0.04 270);
+  --secondary-foreground: oklch(80% 0.08 270);
+  --ring: oklch(65% 0.24 270);
+
+  --glass-bg: oklch(16% 0.025 270 / 0.7);
+  --glass-border: oklch(30% 0.03 270 / 0.5);
+  --glass-shadow: 0 8px 32px oklch(0% 0 0 / 0.3);
+
+  --bubble-user: oklch(57% 0.24 270);
+  --bubble-teacher: oklch(20% 0.03 270);
+  --bubble-teacher-border: oklch(28% 0.04 270);
+}
+
+/* ─── Base styles ──────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  min-height: 100dvh;
+}
+
+/* ─── Animated gradient background ────────────────────────────────── */
+.gradient-bg {
+  background: linear-gradient(
+    135deg,
+    oklch(97% 0.02 270) 0%,
+    oklch(95% 0.04 285) 33%,
+    oklch(96% 0.03 255) 66%,
+    oklch(97% 0.02 270) 100%
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+.dark .gradient-bg {
+  background: linear-gradient(
+    135deg,
+    oklch(12% 0.02 270) 0%,
+    oklch(14% 0.03 285) 33%,
+    oklch(13% 0.025 255) 66%,
+    oklch(12% 0.02 270) 100%
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ─── Glass morphism ───────────────────────────────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-strong {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 48px oklch(15% 0.02 270 / 0.12);
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* ─── Chat bubbles ─────────────────────────────────────────────────── */
+.bubble-user {
+  background: var(--bubble-user);
+  color: white;
+  border-radius: 18px 18px 4px 18px;
+}
+
+.bubble-teacher {
+  background: var(--bubble-teacher);
+  border: 1px solid var(--bubble-teacher-border);
+  border-radius: 18px 18px 18px 4px;
+  color: var(--foreground);
+}
+
+/* ─── Typing indicator ─────────────────────────────────────────────── */
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ─── Glow effects ─────────────────────────────────────────────────── */
+.glow-primary {
+  box-shadow: 0 0 20px oklch(57% 0.24 270 / 0.3),
+              0 0 60px oklch(57% 0.24 270 / 0.1);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--primary), oklch(70% 0.18 65));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Streamed text ────────────────────────────────────────────────── */
+.streamed-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.streamed-text code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--muted);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.streamed-text pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.streamed-text pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+/* ─── Progress ring ────────────────────────────────────────────────── */
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+  transform: rotate(-90deg);
+}
+
+/* ─── Shimmer loading ──────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 25%,
+    var(--border) 50%,
+    var(--muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ─── Achievement unlock animation ────────────────────────────────── */
+@keyframes achievement-pop {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  70% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.achievement-pop {
+  animation: achievement-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── Focus visible ────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ─── Selection ────────────────────────────────────────────────────── */
+::selection {
+  background: oklch(57% 0.24 270 / 0.2);
+  color: var(--foreground);
+}
