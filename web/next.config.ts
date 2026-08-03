@@ -7,9 +7,24 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Prevent webpack from trying to bundle Node.js-only packages.
+  // Without this, webpack hangs trying to resolve Prisma's native .node binaries
+  // and Better Auth's complex dynamic requires during production compilation.
+  serverExternalPackages: [
+    "@prisma/client",
+    "prisma",
+    "better-auth",
+    "@better-auth/core",
+  ],
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
+      allowedOrigins: [
+        "localhost:3000",
+        // Allow all HTTPS origins (Vercel preview/production URLs)
+        ...(process.env.NEXT_PUBLIC_APP_URL
+          ? [process.env.NEXT_PUBLIC_APP_URL.replace(/^https?:\/\//, "")]
+          : []),
+      ],
     },
   },
   images: {
@@ -36,3 +51,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
