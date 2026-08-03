@@ -5,6 +5,8 @@ import { DashboardSidebar } from "@/components/layout/sidebar";
 import { DashboardTopNav } from "@/components/layout/top-nav";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { default: "Dashboard", template: "%s | TeacherAI" },
 };

@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { streamChat } from "@/lib/ai-client";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Next.js proxy for the AI service chat stream endpoint.
  * Validates the user session here before forwarding to Python.

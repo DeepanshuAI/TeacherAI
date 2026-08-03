@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { DashboardOverview } from "@/components/dashboard/overview";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
