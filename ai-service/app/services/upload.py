@@ -11,7 +11,26 @@ from langchain_openai import OpenAIEmbeddings
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
+    try:
+        from langchain_community.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
+    except ImportError:
+        try:
+            from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
+        except ImportError:
+            # Fallback text splitter implementation if missing from environment
+            class RecursiveCharacterTextSplitter:  # type: ignore
+                def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+                    self.chunk_size = chunk_size
+                    self.chunk_overlap = chunk_overlap
+
+                def split_text(self, text: str) -> list[str]:
+                    chunks = []
+                    start = 0
+                    while start < len(text):
+                        end = start + self.chunk_size
+                        chunks.append(text[start:end])
+                        start = end - self.chunk_overlap
+                    return chunks
 
 from app.core.config import settings
 
