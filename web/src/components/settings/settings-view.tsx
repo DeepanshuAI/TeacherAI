@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { User, Bell, Moon, Sun, Volume2, Sparkles, Check, Save } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
@@ -8,6 +8,11 @@ import { useSession } from "@/lib/auth-client";
 export function SettingsView() {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [name, setName] = useState(session?.user?.name || "Student");
   const [learningSpeed, setLearningSpeed] = useState("average");
@@ -127,7 +132,7 @@ export function SettingsView() {
         {/* Theme Preference */}
         <div className="glass rounded-2xl p-6 space-y-4">
           <h2 className="font-semibold text-lg flex items-center gap-2">
-            {theme === "dark" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />} Theme Customization
+            {mounted && theme === "dark" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />} Theme Customization
           </h2>
 
           <div className="flex gap-4">

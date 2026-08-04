@@ -4,7 +4,7 @@ import { Bell, Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface TopNavProps {
   user: { name: string; email: string };
@@ -14,6 +14,11 @@ export function DashboardTopNav({ user }: TopNavProps) {
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -55,7 +60,11 @@ export function DashboardTopNav({ user }: TopNavProps) {
           className="w-9 h-9 rounded-xl hover:bg-[var(--muted)] flex items-center justify-center transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           aria-label="Toggle theme"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {mounted ? (
+            theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />
+          ) : (
+            <div className="w-4 h-4" />
+          )}
         </button>
 
         {/* Sign out */}
