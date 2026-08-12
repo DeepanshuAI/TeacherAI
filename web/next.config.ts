@@ -13,8 +13,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "@prisma/client",
     "prisma",
-    "better-auth",
-    "@better-auth/core",
   ],
   experimental: {
     serverActions: {
