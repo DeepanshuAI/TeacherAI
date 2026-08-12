@@ -29,13 +29,29 @@ class StudentMemoryService:
         # Return default profile for new students
         return {
             "user_id": user_id,
-            "level": "unknown",
-            "weak_topics": [],
-            "strong_topics": [],
-            "learning_speed": "average",
-            "quiz_scores": [],
-            "completed_lessons": [],
-            "total_sessions": 0,
+            "name": None,
+            "age": None,
+            "gradeClass": None,
+            "board": None,
+            "preferredLanguage": "English",
+            "subjects": [],
+            "strongTopics": [],
+            "weakTopics": [],
+            "learningStyle": "visual_interactive",
+            "confidenceLevel": "building",
+            "attentionSpan": "medium",
+            "readingLevel": "grade_appropriate",
+            "writingLevel": "grade_appropriate",
+            "interests": [],
+            "careerGoals": [],
+            "learningPace": "adaptable",
+            "recentMistakes": [],
+            "frequentlyAskedQuestions": [],
+            "knowledgeHistory": {},
+            "masteredTopics": [],
+            "topicsBeingLearned": [],
+            "quizPerformance": {},
+            "revisionHistory": []
         }
 
     async def update_profile(self, user_id: str, state: dict) -> None:
@@ -43,16 +59,9 @@ class StudentMemoryService:
         try:
             redis = get_redis()
             key = f"student_profile:{user_id}"
-
-            profile = {
-                "user_id": user_id,
-                "level": state.get("student_level", "unknown"),
-                "weak_topics": state.get("weak_topics", []),
-                "strong_topics": state.get("strong_topics", []),
-                "learning_speed": state.get("learning_speed", "average"),
-                "quiz_scores": state.get("quiz_results", []),
-                "completed_lessons": state.get("completed_lessons", []),
-            }
+            
+            profile = state.get("student_profile") or {}
+            profile["user_id"] = user_id
 
             await redis.setex(key, PROFILE_TTL, json.dumps(profile))
             logger.info("Student profile updated", user_id=user_id)

@@ -18,11 +18,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, field_validator
 import psycopg
 
+_in_memory_checkpointer = MemorySaver()
+
 from app.agent.graph import get_compiled_graph
-from app.agent.state import LessonPhase, StudentLevel
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.core.security import verify_user_token
@@ -70,12 +72,19 @@ async def _stream_teacher_response(
 ) -> AsyncGenerator[str, None]:
     """Core streaming logic — runs graph and yields SSE events."""
 
-    conn_str = _get_checkpointer_conn_str()
+    checkpointer = None
+    conn = None
 
-    async with await psycopg.AsyncConnection.connect(conn_str, autocommit=True) as conn:
+    try:
+        conn_str = _get_checkpointer_conn_str()
+        conn = await psycopg.AsyncConnection.connect(conn_str, autocommit=True)
         checkpointer = AsyncPostgresSaver(conn)
         await checkpointer.setup()
+    except Exception as e:
+        logger.warning("PostgreSQL checkpointer unavailable, using in-memory fallback", error=str(e))
+        checkpointer = _in_memory_checkpointer
 
+    try:
         compiled = await get_compiled_graph(checkpointer)
 
         # Load student profile from memory
@@ -95,36 +104,21 @@ async def _stream_teacher_response(
                 "messages": [HumanMessage(content=request.message)]
             }
         else:
-            # New session — initialize full state
+            # New session — initialize full agent state
             input_state = {
                 "messages": [HumanMessage(content=request.message)],
                 "session_id": request.session_id,
                 "user_id": user_id,
-                "student_name": request.student_name,
-                "topic": request.topic,
-                "current_phase": LessonPhase.IDENTIFY,
-                "lesson_plan": None,
-                "current_subtopic_index": 0,
-                "student_level": profile.get("level", StudentLevel.UNKNOWN),
-                "weak_topics": profile.get("weak_topics", []),
-                "strong_topics": profile.get("strong_topics", []),
-                "learning_speed": profile.get("learning_speed", "average"),
-                "previous_quiz_scores": profile.get("quiz_scores", []),
-                "completed_lessons": profile.get("completed_lessons", []),
-                "questions_asked": 0,
-                "correct_answers": 0,
-                "incorrect_answers": 0,
-                "current_difficulty": "easy",
-                "mistakes_this_session": [],
-                "examples_given": 0,
+                "topic": request.topic or "General Learning",
+                "student_profile": profile or {},
+                "internal_reasoning": None,
+                "suggested_tool": "chat",
+                "tool_output": None,
                 "active_quiz": None,
                 "quiz_results": [],
-                "needs_clarification": False,
-                "clarification_question": None,
-                "lesson_complete": False,
-                "error": None,
                 "last_teacher_message": "",
                 "message_type": "text",
+                "error": None,
             }
 
         # Stream events from LangGraph
@@ -140,7 +134,7 @@ async def _stream_teacher_response(
             kind = event.get("event", "")
             name = event.get("name", "")
 
-            if kind == "on_chat_model_stream":
+            if kind == "on_chat_model_stream" and current_node == "generate":
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     c = chunk.content
@@ -170,6 +164,8 @@ async def _stream_teacher_response(
                 output = event.get("data", {}).get("output", {})
                 if isinstance(output, dict):
                     message_type = output.get("message_type", message_type)
+                    if name == "generate" and "last_teacher_message" in output:
+                        full_response = output.get("last_teacher_message", full_response)
 
         # Send completion event
         yield f"data: {json.dumps({'type': 'done', 'message_type': message_type, 'full_response': full_response})}\n\n"
@@ -179,6 +175,9 @@ async def _stream_teacher_response(
         final_state = await compiled.aget_state(thread_config)
         if final_state and final_state.values:
             await memory_service.update_profile(user_id, final_state.values)
+    finally:
+        if conn:
+            await conn.close()
 
 
 @router.post("/stream")

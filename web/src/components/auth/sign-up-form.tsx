@@ -41,12 +41,14 @@ export function SignUpForm() {
       });
 
       if (result?.error) {
-        console.error("[SignUp Error]:", result.error);
-        setError(result.error.message || result.error.statusText || "Failed to create account. Please check your details.");
+        console.warn("[SignUp Error Details]:", JSON.stringify(result.error));
+        const errObj = result.error as Record<string, any>;
+        const msg = errObj?.message || errObj?.statusText || (typeof result.error === "string" ? result.error : "Failed to create account. Please check your details.");
+        setError(msg);
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/chat");
       router.refresh();
     } catch (err: unknown) {
       console.error("[SignUp Exception]:", err);
@@ -60,7 +62,7 @@ export function SignUpForm() {
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: "/chat",
       });
     } catch (err: unknown) {
       console.error("[Google SignUp Error]:", err);

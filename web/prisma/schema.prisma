@@ -83,34 +83,58 @@ model Verification {
 // ─── Student Learning Profile ─────────────────────────────────────────────────
 
 model StudentProfile {
-  id            String    @id @default(cuid())
-  userId        String    @unique
-  level         String    @default("unknown") // beginner, intermediate, advanced
-  weakTopics    String[]  @default([])
-  strongTopics  String[]  @default([])
-  learningSpeed String    @default("average") // slow, average, fast
-  totalSessions Int       @default(0)
-  totalMinutes  Int       @default(0)
-  currentStreak Int       @default(0)
-  longestStreak Int       @default(0)
-  lastSessionAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  name                    String?
+  age                     Int?
+  gradeClass              String?   // Class / Grade e.g. "Class 8"
+  board                   String?   // Educational board e.g. "CBSE", "ICSE"
+  preferredLanguage       String    @default("English")
+  subjects                String[]  @default([])
+  strongTopics            String[]  @default([])
+  weakTopics              String[]  @default([])
+  learningStyle           String    @default("visual_interactive")
+  confidenceLevel         String    @default("building")
+  attentionSpan           String    @default("medium")
+  readingLevel            String    @default("grade_appropriate")
+  writingLevel            String    @default("grade_appropriate")
+  interests               String[]  @default([])
+  careerGoals             String[]  @default([])
+  learningPace            String    @default("adaptable")
+  recentMistakes          Json?     
+  frequentlyAskedQuestions Json?    
+  knowledgeHistory        Json?     
+  masteredTopics          String[]  @default([])
+  topicsBeingLearned      String[]  @default([])
+  quizPerformance         Json?     
+  revisionHistory         Json?     
+  level                   String    @default("unknown") 
+  learningSpeed           String    @default("average") 
+  totalSessions           Int       @default(0)
+  totalMinutes            Int       @default(0)
+  currentStreak           Int       @default(0)
+  longestStreak           Int       @default(0)
+  lastSessionAt           DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-// ─── Lesson Sessions ──────────────────────────────────────────────────────────
+// ─── Lesson / Chat Sessions ──────────────────────────────────────────────────
 
 model LessonSession {
   id          String        @id @default(cuid())
   userId      String
   threadId    String        @unique // LangGraph thread_id
-  topic       String
+  title       String        @default("New Conversation")
+  topic       String        @default("General Learning")
   status      SessionStatus @default(ACTIVE)
-  phase       String        @default("identify_level")
+  phase       String        @default("interactive_chat")
+  isPinned    Boolean       @default(false)
+  isArchived  Boolean       @default(false)
   durationMin Int?
   lessonPlan  Json?
   summary     String?

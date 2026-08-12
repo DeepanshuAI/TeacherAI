@@ -1,80 +1,44 @@
-"""TeacherState — The shared state schema for the LangGraph teacher agent."""
+"""TeacherState — The shared state schema for the dynamic TeacherAI agent."""
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 from typing_extensions import TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 
-class LessonPhase(str):
-    """Lesson phase constants."""
-    IDENTIFY = "identify_level"
-    CLARIFY = "clarify"
-    PLAN = "plan_lesson"
-    EXPLAIN = "explain"
-    EXAMPLE = "example"
-    PRACTICE = "practice"
-    EVALUATE = "evaluate"
-    QUIZ = "quiz"
-    SUMMARIZE = "summarize"
-    HOMEWORK = "assign_homework"
-    COMPLETE = "complete"
-
-
-class StudentLevel(str):
-    """Student knowledge level constants."""
-    BEGINNER = "beginner"
-    INTERMEDIATE = "intermediate"
-    ADVANCED = "advanced"
-    UNKNOWN = "unknown"
-
-
 class TeacherState(TypedDict):
     """
-    The shared state object for the teacher agent graph.
-    All nodes read from and write to this state.
+    The shared state object for the AI Teacher Agent.
     """
     # --- Conversation ---
     messages: Annotated[list[BaseMessage], add_messages]
 
-    # --- Session identity ---
+    # --- Session & Identity ---
     session_id: str
     user_id: str
-    student_name: str
+    topic: Optional[str]
 
-    # --- Current lesson context ---
-    topic: str
-    current_phase: str               # One of LessonPhase constants
-    lesson_plan: Optional[list[str]]  # Ordered list of subtopics
-    current_subtopic_index: int
+    # --- Comprehensive Student Profile ---
+    student_profile: dict[str, Any]  # Stores name, age, gradeClass, board, subjects, strongTopics, weakTopics, knowledgeHistory, etc.
 
-    # --- Student profile (loaded from DB at session start) ---
-    student_level: str               # One of StudentLevel constants
-    weak_topics: list[str]
-    strong_topics: list[str]
-    learning_speed: str              # "slow", "average", "fast"
-    previous_quiz_scores: list[float]
-    completed_lessons: list[str]
+    # --- Modular Cognitive Brain Pipeline ---
+    intent: Optional[dict[str, Any]]
+    student_analysis: Optional[dict[str, Any]]
+    teaching_strategy: Optional[str]
+    learning_evaluation: Optional[dict[str, Any]]
 
-    # --- Current lesson tracking ---
-    questions_asked: int
-    correct_answers: int
-    incorrect_answers: int
-    current_difficulty: str          # "easy", "medium", "hard"
-    mistakes_this_session: list[str]
-    examples_given: int
+    # --- Agent Reasoning & Execution ---
+    internal_reasoning: Optional[str] # Internal chain of thought before generating response
+    suggested_tool: Optional[str]     # e.g., "quiz_generator", "profile_updater", "knowledge_estimator", "revision_planner"
+    tool_output: Optional[dict[str, Any]]
 
-    # --- Quiz state ---
-    active_quiz: Optional[dict]      # Current quiz being administered
-    quiz_results: list[dict]
+    # --- Active Quiz & Interactive Components ---
+    active_quiz: Optional[dict[str, Any]]
+    quiz_results: list[dict[str, Any]]
 
-    # --- Control flow ---
-    needs_clarification: bool
-    clarification_question: Optional[str]
-    lesson_complete: bool
+    # --- Control & Output ---
+    last_teacher_message: str
+    message_type: str                  # "text", "quiz", "summary", "onboarding"
     error: Optional[str]
 
-    # --- Output for streaming ---
-    last_teacher_message: str
-    message_type: str                # "text", "quiz", "code", "summary", "homework"

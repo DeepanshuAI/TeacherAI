@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Trophy, Flame, Zap, Award, Star, Lock, CheckCircle2 } from "lucide-react";
+import { Trophy, Flame, Zap, Award, Star, Lock, CheckCircle2  } from "lucide-react";
 
 interface Achievement {
   id: string;

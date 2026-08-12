@@ -1,39 +1,39 @@
 """
-LangGraph node implementations for the TeacherAI agent.
+LangGraph node implementations for the TeacherAI Agent.
 
-Each node:
-1. Receives the current TeacherState
-2. Performs one specific teaching action
-3. Returns a state update dict
+Architecture Workflow:
+1. `node_reason`: Pre-response internal reasoning (analyzes student profile, level, misconceptions, and suggested tools).
+2. `node_execute_tools`: Executes modular internal tools (ProfileUpdater, KnowledgeEstimator, QuizGenerator, etc.).
+3. `node_generate_response`: Generates the adaptive Socratic response using LLM.
 """
 
 import json
 from typing import Any
-
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
 except ImportError:
     ChatGoogleGenerativeAI = None  # type: ignore
 
 from app.agent.prompts import (
-    ASSIGN_HOMEWORK_PROMPT,
-    CLARIFY_PROMPT,
-    EVALUATE_PROMPT,
-    EXAMPLE_PROMPT,
-    EXPLAIN_MISTAKE_PROMPT,
-    EXPLAIN_PROMPT,
-    IDENTIFY_LEVEL_PROMPT,
-    PLAN_LESSON_PROMPT,
-    PRACTICE_PROMPT,
-    QUIZ_PROMPT,
-    SUMMARIZE_PROMPT,
-    TEACHER_SYSTEM_PROMPT,
-    UPDATE_MEMORY_PROMPT,
+    INTENT_ANALYZER_PROMPT,
+    STUDENT_ANALYZER_PROMPT,
+    TEACHING_PLANNER_PROMPT,
+    LEARNING_EVALUATOR_PROMPT,
+    INTERNAL_REASONING_PROMPT,
+    ONBOARDING_INITIAL_PROMPT,
+    TEACHER_AGENT_SYSTEM_PROMPT,
 )
-from app.agent.state import LessonPhase, StudentLevel, TeacherState
+from app.agent.state import TeacherState
+from app.agent.tools import (
+    execute_homework_generator,
+    execute_knowledge_estimator,
+    execute_profile_updater,
+    execute_quiz_generator,
+)
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -52,25 +52,26 @@ def _get_llm(temperature: float = 0.7) -> Any:
             model=model_name,
             temperature=temperature,
             google_api_key=api_key,
+            streaming=True,
         )
     elif provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
             model="claude-3-5-sonnet-20241022",
             temperature=temperature,
-            api_key=settings.ANTHROPIC_API_KEY,
+            api_key=getattr(settings, "ANTHROPIC_API_KEY", ""),
         )
     else:
         return ChatOpenAI(
-            model=settings.OPENAI_MODEL,
+            model=getattr(settings, "OPENAI_MODEL", "gpt-4o"),
             temperature=temperature,
-            api_key=settings.OPENAI_API_KEY,
+            api_key=getattr(settings, "OPENAI_API_KEY", ""),
             streaming=True,
         )
 
 
 def _get_json_llm() -> Any:
-    """LLM instance for structured JSON output."""
+    """LLM instance for JSON reasoning."""
     provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
     
     if provider == "gemini":
@@ -80,14 +81,15 @@ def _get_json_llm() -> Any:
         api_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "GOOGLE_API_KEY", "")
         return ChatGoogleGenerativeAI(
             model=model_name,
-            temperature=0.3,
+            temperature=0.2,
             google_api_key=api_key,
+            model_kwargs={"response_mime_type": "application/json"},
         )
     else:
         return ChatOpenAI(
-            model=settings.OPENAI_MODEL,
-            temperature=0.3,
-            api_key=settings.OPENAI_API_KEY,
+            model=getattr(settings, "OPENAI_MODEL", "gpt-4o"),
+            temperature=0.2,
+            api_key=getattr(settings, "OPENAI_API_KEY", ""),
             response_format={"type": "json_object"},
         )
 
@@ -107,590 +109,239 @@ def _extract_text(content: Any) -> str:
     return str(content)
 
 
-def _format_messages_for_llm(messages: list) -> list:
-    """Ensure message history for LLM does not end with an AIMessage (required by Gemini)."""
-    cleaned = list(messages)
-    # Ensure system messages stay at front, but system + user/ai list doesn't end in AIMessage
-    # Find last index that is HumanMessage or SystemMessage
-    while len(cleaned) > 1 and isinstance(cleaned[-1], AIMessage):
-        cleaned.pop()
-    return cleaned
-
-
-async def node_identify_level(state: TeacherState) -> dict[str, Any]:
-    """
-    Assess the student's current knowledge level about the topic.
-    Asks a diagnostic question to understand their starting point.
-    """
-    logger.info("Entering identify_level node", topic=state["topic"])
-    llm = _get_llm(temperature=0.6)
-
-    # Check if we already have enough info from messages
-    messages_count = len(state["messages"])
-
-    if messages_count >= 3 and state["student_level"] != StudentLevel.UNKNOWN:
-        # Already identified — move to planning
-        return {"current_phase": LessonPhase.PLAN, "needs_clarification": False}
-
-    prompt = IDENTIFY_LEVEL_PROMPT.format(topic=state["topic"])
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"],
-    ]
-
-    response = await llm.ainvoke(_format_messages_for_llm(messages))
-    teacher_message = _extract_text(response.content)
-
-    # Try to infer level from conversation
-    inferred_level = _infer_level_from_conversation(state["messages"], state["topic"])
-    needs_more_info = messages_count < 3 or inferred_level == StudentLevel.UNKNOWN
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "student_level": inferred_level if not needs_more_info else StudentLevel.UNKNOWN,
-        "current_phase": LessonPhase.IDENTIFY,
-        "needs_clarification": needs_more_info,
-    }
-
-
-async def node_clarify(state: TeacherState) -> dict[str, Any]:
-    """Ask a clarifying question about the student's specific needs."""
-    logger.info("Entering clarify node")
-    llm = _get_llm(temperature=0.6)
-
-    prompt = CLARIFY_PROMPT.format(topic=state["topic"])
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.CLARIFY,
-        "needs_clarification": False,
-    }
-
-
-async def node_plan_lesson(state: TeacherState) -> dict[str, Any]:
-    """Create a structured lesson plan for the student."""
-    logger.info("Entering plan_lesson node", level=state["student_level"])
-    llm = _get_llm(temperature=0.5)
-
-    # Extract student's stated goal from conversation
-    goal = _extract_goal_from_messages(state["messages"])
-
-    prompt = PLAN_LESSON_PROMPT.format(
-        topic=state["topic"],
-        level=state["student_level"],
-        weak_topics=", ".join(state["weak_topics"]) or "none identified yet",
-        strong_topics=", ".join(state["strong_topics"]) or "none identified yet",
-        goal=goal,
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    # Parse lesson plan from response
-    lesson_plan = _parse_lesson_plan(teacher_message, state["topic"])
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.EXPLAIN,
-        "lesson_plan": lesson_plan,
-        "current_subtopic_index": 0,
-    }
-
-
-async def node_explain(state: TeacherState) -> dict[str, Any]:
-    """Explain the current subtopic in a clear, concise way."""
-    logger.info("Entering explain node")
-    llm = _get_llm(temperature=0.7)
-
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-    idx = state.get("current_subtopic_index", 0)
-    current_subtopic = lesson_plan[idx] if idx < len(lesson_plan) else state["topic"]
-
-    prompt = EXPLAIN_PROMPT.format(
-        current_subtopic=current_subtopic,
-        level=state["student_level"],
-        topic=state["topic"],
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"][-10:],  # Keep last 10 messages for context
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.EXAMPLE,
-        "examples_given": state.get("examples_given", 0),
-    }
-
-
-async def node_example(state: TeacherState) -> dict[str, Any]:
-    """Provide a concrete example for the current concept."""
-    logger.info("Entering example node")
-    llm = _get_llm(temperature=0.8)
-
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-    idx = state.get("current_subtopic_index", 0)
-    current_subtopic = lesson_plan[idx] if idx < len(lesson_plan) else state["topic"]
-
-    prompt = EXAMPLE_PROMPT.format(
-        current_subtopic=current_subtopic,
-        level=state["student_level"],
-        concept=current_subtopic,
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"][-6:],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.PRACTICE,
-        "examples_given": state.get("examples_given", 0) + 1,
-    }
-
-
-async def node_practice(state: TeacherState) -> dict[str, Any]:
-    """Pose a practice question to the student."""
-    logger.info("Entering practice node")
-    llm = _get_llm(temperature=0.6)
-
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-    idx = state.get("current_subtopic_index", 0)
-    current_subtopic = lesson_plan[idx] if idx < len(lesson_plan) else state["topic"]
-
-    prompt = PRACTICE_PROMPT.format(
-        current_subtopic=current_subtopic,
-        level=state["student_level"],
-        difficulty=state.get("current_difficulty", "easy"),
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"][-6:],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.EVALUATE,
-        "questions_asked": state.get("questions_asked", 0) + 1,
-    }
-
-
-async def node_evaluate(state: TeacherState) -> dict[str, Any]:
-    """Evaluate the student's answer and provide feedback."""
-    logger.info("Entering evaluate node")
-    llm = _get_llm(temperature=0.5)
-
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-    idx = state.get("current_subtopic_index", 0)
-    current_subtopic = lesson_plan[idx] if idx < len(lesson_plan) else state["topic"]
-
-    # Get the last student message
-    last_student_message = ""
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, HumanMessage):
-            last_student_message = msg.content
-            break
-
-    prompt = EVALUATE_PROMPT.format(
-        student_answer=last_student_message,
-        correct_concepts=current_subtopic,
-        level=state["student_level"],
-        mistakes=", ".join(state.get("mistakes_this_session", [])) or "none",
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"][-8:],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    # Determine if answer was correct based on response sentiment
-    is_correct = _assess_correctness(teacher_message)
-
-    correct_count = state.get("correct_answers", 0)
-    incorrect_count = state.get("incorrect_answers", 0)
-    mistakes = list(state.get("mistakes_this_session", []))
-
-    if is_correct:
-        correct_count += 1
-        next_phase = LessonPhase.EXPLAIN  # Move to next subtopic or increase difficulty
-    else:
-        incorrect_count += 1
-        mistakes.append(current_subtopic)
-        next_phase = LessonPhase.EVALUATE  # Stay in evaluate, show mistake explanation
-
-    # Advance to next subtopic if student answered correctly
-    next_idx = idx
-    if is_correct and idx + 1 < len(lesson_plan):
-        next_idx = idx + 1
-    elif is_correct and idx + 1 >= len(lesson_plan):
-        next_phase = LessonPhase.QUIZ
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": next_phase,
-        "correct_answers": correct_count,
-        "incorrect_answers": incorrect_count,
-        "mistakes_this_session": mistakes,
-        "current_subtopic_index": next_idx,
-    }
-
-
-async def node_explain_mistake(state: TeacherState) -> dict[str, Any]:
-    """Explain a mistake in a different way to help the student understand."""
-    logger.info("Entering explain_mistake node")
-    llm = _get_llm(temperature=0.7)
-
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-    idx = state.get("current_subtopic_index", 0)
-    current_subtopic = lesson_plan[idx] if idx < len(lesson_plan) else state["topic"]
-
-    last_student_message = ""
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, HumanMessage):
-            last_student_message = msg.content
-            break
-
-    prompt = EXPLAIN_MISTAKE_PROMPT.format(
-        mistake_topic=current_subtopic,
-        student_answer=last_student_message,
-        correct_concept=current_subtopic,
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-        *state["messages"][-8:],
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "text",
-        "current_phase": LessonPhase.PRACTICE,
-    }
-
-
-async def node_quiz(state: TeacherState) -> dict[str, Any]:
-    """Generate and administer a quiz on the completed lesson."""
-    logger.info("Entering quiz node")
-    llm = _get_json_llm()
-
-    # Determine question type and difficulty based on student performance
-    correct = state.get("correct_answers", 0)
-    total = state.get("questions_asked", 1)
-    score = (correct / total) * 100 if total > 0 else 50
-
-    if score >= 80:
-        difficulty = "hard"
-        question_type = "short_answer"
-    elif score >= 60:
-        difficulty = "medium"
-        question_type = "mcq"
-    else:
-        difficulty = "easy"
-        question_type = "true_false"
-
-    prompt = QUIZ_PROMPT.format(
-        topic=state["topic"],
-        difficulty=difficulty,
-        question_type=question_type,
-    )
-
-    response = await llm.ainvoke([
-        SystemMessage(content="Generate a quiz question and return valid JSON only."),
-        HumanMessage(content=prompt),
-    ])
-
-    quiz_data = {}
-    try:
-        quiz_data = json.loads(_extract_text(response.content))
-    except json.JSONDecodeError:
-        logger.error("Failed to parse quiz JSON", response=_extract_text(response.content))
-        quiz_data = {
-            "type": "short_answer",
-            "question": f"In your own words, explain what you learned about {state['topic']} today.",
-            "correct_answer": "Open-ended reflection",
-            "explanation": "This helps solidify understanding through reflection.",
-            "difficulty": "easy",
-            "topic": state["topic"],
-        }
-
-    # Format quiz for display
-    quiz_message = _format_quiz_message(quiz_data)
-
-    return {
-        "messages": [AIMessage(content=quiz_message)],
-        "last_teacher_message": quiz_message,
-        "message_type": "quiz",
-        "active_quiz": quiz_data,
-        "current_phase": LessonPhase.QUIZ,
-        "current_difficulty": difficulty,
-    }
-
-
-async def node_summarize(state: TeacherState) -> dict[str, Any]:
-    """Summarize the lesson and the student's performance."""
-    logger.info("Entering summarize node")
-    llm = _get_llm(temperature=0.6)
-
-    correct = state.get("correct_answers", 0)
-    total = state.get("questions_asked", 1)
-    lesson_plan = state.get("lesson_plan") or [state["topic"]]
-
-    # Identify strong and weak areas from this session
-    mistakes = state.get("mistakes_this_session", [])
-    covered_topics = lesson_plan[: state.get("current_subtopic_index", 0) + 1]
-    strong_areas = [t for t in covered_topics if t not in mistakes]
-
-    prompt = SUMMARIZE_PROMPT.format(
-        topic=state["topic"],
-        subtopics_covered=", ".join(covered_topics),
-        correct_answers=correct,
-        total_questions=total,
-        strong_areas=", ".join(strong_areas) or "all topics",
-        weak_areas=", ".join(mistakes) or "none",
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "summary",
-        "current_phase": LessonPhase.HOMEWORK,
-    }
-
-
-async def node_assign_homework(state: TeacherState) -> dict[str, Any]:
-    """Create personalized homework based on the lesson."""
-    logger.info("Entering assign_homework node")
-    llm = _get_llm(temperature=0.7)
-
-    mistakes = state.get("mistakes_this_session", [])
-
-    prompt = ASSIGN_HOMEWORK_PROMPT.format(
-        topic=state["topic"],
-        level=state["student_level"],
-        weak_areas=", ".join(mistakes) or "none identified",
-    )
-
-    messages = [
-        SystemMessage(content=TEACHER_SYSTEM_PROMPT),
-        SystemMessage(content=prompt),
-    ]
-
-    response = await llm.ainvoke(messages)
-    teacher_message = _extract_text(response.content)
-
-    return {
-        "messages": [AIMessage(content=teacher_message)],
-        "last_teacher_message": teacher_message,
-        "message_type": "homework",
-        "current_phase": LessonPhase.COMPLETE,
-        "lesson_complete": True,
-    }
-
-
-async def node_update_memory(state: TeacherState) -> dict[str, Any]:
-    """Update the student's learning profile based on session performance."""
-    logger.info("Entering update_memory node")
-    llm = _get_json_llm()
-
-    correct = state.get("correct_answers", 0)
-    total = state.get("questions_asked", 1)
-    score = (correct / total) * 100 if total > 0 else 50
-
-    prompt = UPDATE_MEMORY_PROMPT.format(
-        topic=state["topic"],
-        performance_summary=f"Score: {score:.0f}% ({correct}/{total} correct)",
-        weak_topics=", ".join(state.get("weak_topics", [])),
-        strong_topics=", ".join(state.get("strong_topics", [])),
-    )
-
-    response = await llm.ainvoke([
-        SystemMessage(content="Update student profile and return valid JSON only."),
-        HumanMessage(content=prompt),
-    ])
-
-    memory_update = {}
-    try:
-        memory_update = json.loads(_extract_text(response.content))
-    except json.JSONDecodeError:
-        logger.error("Failed to parse memory update JSON")
-        memory_update = {
-            "add_to_strong": [],
-            "add_to_weak": [],
-            "learning_speed_this_session": "average",
-            "notes": "",
-        }
-
-    # Merge with existing topics
-    strong_topics = list(set(state.get("strong_topics", []) + memory_update.get("add_to_strong", [])))
-    weak_topics = list(set(state.get("weak_topics", []) + memory_update.get("add_to_weak", [])))
-    # Remove from weak if now in strong
-    weak_topics = [t for t in weak_topics if t not in strong_topics]
-
-    return {
-        "strong_topics": strong_topics,
-        "weak_topics": weak_topics,
-        "learning_speed": memory_update.get("learning_speed_this_session", "average"),
-        "quiz_results": state.get("quiz_results", []) + [
-            {
-                "topic": state["topic"],
-                "score": score,
-                "correct": correct,
-                "total": total,
-                "notes": memory_update.get("notes", ""),
-            }
-        ],
-    }
-
-
-# ─── Helper functions ────────────────────────────────────────────────────────
-
-def _infer_level_from_conversation(messages: list, topic: str) -> str:
-    """Heuristically infer student level from their messages."""
+async def node_analyze_intent(state: TeacherState) -> dict[str, Any]:
+    """Module 1: Intent Analyzer — Classifies student query category and topic."""
+    logger.info("Entering node_analyze_intent")
+    messages = state.get("messages") or []
     if not messages:
-        return StudentLevel.UNKNOWN
+        return {"intent": {"category": "casual_conversation", "topic": None, "summary": "Initial onboarding greeting"}}
 
-    # Look at last few human messages
-    human_texts = [
-        m.content.lower()
-        for m in messages
-        if isinstance(m, HumanMessage)
+    latest_msg = ""
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            latest_msg = m.content
+            break
+
+    llm = _get_json_llm()
+    prompt = INTENT_ANALYZER_PROMPT.format(latest_user_message=latest_msg)
+    try:
+        res = await llm.ainvoke([SystemMessage(content="Classify student intent as JSON."), HumanMessage(content=prompt)])
+        data = json.loads(_extract_text(res.content))
+        return {"intent": data}
+    except Exception as e:
+        logger.warning("Intent analyzer fallback", error=str(e))
+        return {"intent": {"category": "explanation", "topic": state.get("topic"), "summary": latest_msg}}
+
+
+async def node_analyze_student(state: TeacherState) -> dict[str, Any]:
+    """Module 2: Student Analyzer — Assesses student profile, current class, mastery, and confidence."""
+    logger.info("Entering node_analyze_student")
+    profile = state.get("student_profile") or {}
+    messages = state.get("messages") or []
+    recent_history = "\n".join([f"{'Student' if isinstance(m, HumanMessage) else 'Teacher'}: {m.content}" for m in messages[-6:]])
+
+    llm = _get_json_llm()
+    prompt = STUDENT_ANALYZER_PROMPT.format(student_profile_json=json.dumps(profile), recent_history=recent_history)
+    try:
+        res = await llm.ainvoke([SystemMessage(content="Analyze student state as JSON."), HumanMessage(content=prompt)])
+        data = json.loads(_extract_text(res.content))
+        return {"student_analysis": data}
+    except Exception as e:
+        logger.warning("Student analyzer fallback", error=str(e))
+        return {"student_analysis": {"estimated_mastery": "beginner", "confidence_level": profile.get("confidenceLevel", "building")}}
+
+
+async def node_plan_teaching(state: TeacherState) -> dict[str, Any]:
+    """Module 3: Teaching Planner — Formulates explicit teaching strategy before generating response."""
+    logger.info("Entering node_plan_teaching")
+    intent = state.get("intent") or {}
+    student_analysis = state.get("student_analysis") or {}
+    profile = state.get("student_profile") or {}
+    messages = state.get("messages") or []
+
+    latest_msg = ""
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            latest_msg = m.content
+            break
+    recent_history = "\n".join([f"{'Student' if isinstance(m, HumanMessage) else 'Teacher'}: {m.content}" for m in messages[-6:]])
+
+    llm = _get_json_llm()
+    prompt = TEACHING_PLANNER_PROMPT.format(
+        intent_json=json.dumps(intent),
+        student_analysis_json=json.dumps(student_analysis),
+        student_profile_json=json.dumps(profile),
+        recent_history=recent_history,
+        latest_user_message=latest_msg
+    )
+    try:
+        res = await llm.ainvoke([SystemMessage(content="Formulate teaching strategy as JSON."), HumanMessage(content=prompt)])
+        data = json.loads(_extract_text(res.content))
+        strategy_str = f"Strategy: {data.get('strategy_name', 'Socratic Adaptation')}. Tactics: {', '.join(data.get('tactics', []))}. Tone: {data.get('tone', 'encouraging')}"
+        return {"teaching_strategy": strategy_str, "internal_reasoning": strategy_str}
+    except Exception as e:
+        logger.warning("Teaching planner fallback", error=str(e))
+        return {"teaching_strategy": "Adapt response to student level with clear explanations and 1 follow-up question."}
+
+
+async def node_evaluate_learning(state: TeacherState) -> dict[str, Any]:
+    """Module 5: Learning Evaluator — Evaluates student understanding post-generation."""
+    logger.info("Entering node_evaluate_learning")
+    messages = state.get("messages") or []
+    last_teacher_msg = state.get("last_teacher_message", "")
+    latest_msg = ""
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            latest_msg = m.content
+            break
+
+    llm = _get_json_llm()
+    prompt = LEARNING_EVALUATOR_PROMPT.format(
+        latest_user_message=latest_msg,
+        teacher_response=last_teacher_msg,
+        topic=state.get("topic") or "General"
+    )
+    try:
+        res = await llm.ainvoke([SystemMessage(content="Evaluate student understanding as JSON."), HumanMessage(content=prompt)])
+        data = json.loads(_extract_text(res.content))
+        return {"learning_evaluation": data}
+    except Exception as e:
+        logger.warning("Learning evaluator fallback", error=str(e))
+        return {"learning_evaluation": {"demonstrated_understanding": "unassessed"}}
+
+
+async def node_update_profile(state: TeacherState) -> dict[str, Any]:
+    """Module 6: Student Profile Updater — Updates student profile metrics automatically without asking."""
+    logger.info("Entering node_update_profile")
+    profile = state.get("student_profile") or {}
+    eval_data = state.get("learning_evaluation") or {}
+    student_analysis = state.get("student_analysis") or {}
+
+    updates = {}
+    if student_analysis.get("detected_profile_updates"):
+        updates.update(student_analysis["detected_profile_updates"])
+
+    if eval_data.get("new_weak_topics"):
+        weak = set(profile.get("weakTopics", []))
+        weak.update(eval_data["new_weak_topics"])
+        updates["weakTopics"] = list(weak)
+
+    if eval_data.get("new_strong_topics"):
+        strong = set(profile.get("strongTopics", []))
+        strong.update(eval_data["new_strong_topics"])
+        updates["strongTopics"] = list(strong)
+
+    if eval_data.get("recent_mistakes"):
+        mistakes = profile.get("recentMistakes", [])
+        mistakes.extend(eval_data["recent_mistakes"])
+        updates["recentMistakes"] = mistakes[-10:]
+
+    if updates:
+        profile = await execute_profile_updater(profile, updates)
+        return {"student_profile": profile}
+
+    return {}
+
+
+async def node_reason(state: TeacherState) -> dict[str, Any]:
+    """Backward-compatible reason node wrapper."""
+    return await node_plan_teaching(state)
+
+
+async def node_execute_tools(state: TeacherState) -> dict[str, Any]:
+    """
+    Step 2: Tool Execution Node.
+    Executes background tool operations (ProfileUpdater, KnowledgeEstimator, QuizGenerator, etc.).
+    """
+    tool = state.get("suggested_tool") or "chat"
+    profile = state.get("student_profile") or {}
+    tool_output = state.get("tool_output") or {}
+    messages = state.get("messages") or []
+    
+    latest_user_msg = ""
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            latest_user_msg = m.content
+            break
+
+    state_update: dict[str, Any] = {}
+    
+    # 1. Always apply detected profile updates if present
+    detected_updates = tool_output.get("detected_updates", {})
+    if detected_updates:
+        profile = await execute_profile_updater(profile, detected_updates)
+        state_update["student_profile"] = profile
+
+    # 2. Run specific tool
+    if tool == "quiz_generator":
+        topic = state.get("topic") or "General Learning"
+        quiz = await execute_quiz_generator(profile, topic)
+        state_update["active_quiz"] = quiz
+        state_update["message_type"] = "quiz"
+    elif tool == "knowledge_estimator":
+        topic = state.get("topic") or "General Learning"
+        ke_res = await execute_knowledge_estimator(profile, topic, latest_user_msg)
+        profile.update(ke_res)
+        state_update["student_profile"] = profile
+    elif tool == "homework_generator":
+        topic = state.get("topic") or "General Learning"
+        hw = await execute_homework_generator(profile, topic)
+        state_update["tool_output"] = {"homework": hw}
+        state_update["message_type"] = "homework"
+
+    return state_update
+
+
+async def node_generate_response(state: TeacherState) -> dict[str, Any]:
+    """
+    Module 4: Prompt Builder & Response Generation Node.
+    Generates the final adaptive Socratic message to send to the student using Intent, Student Analysis, & Teaching Strategy.
+    """
+    logger.info("Entering node_generate_response")
+    llm = _get_llm(temperature=0.7)
+    
+    profile = state.get("student_profile") or {}
+    messages = state.get("messages") or []
+    intent = state.get("intent") or {}
+    student_analysis = state.get("student_analysis") or {}
+    strategy = state.get("teaching_strategy") or state.get("internal_reasoning") or "Adapt to student level."
+    active_quiz = state.get("active_quiz")
+
+    # If this is onboarding initial start:
+    if not messages:
+        response = await llm.ainvoke([SystemMessage(content=ONBOARDING_INITIAL_PROMPT)])
+        msg_text = _extract_text(response.content)
+        return {
+            "messages": [AIMessage(content=msg_text)],
+            "last_teacher_message": msg_text,
+            "message_type": "onboarding"
+        }
+
+    # Module 4: Prompt Builder assembling Context + Strategy
+    system_prompt = TEACHER_AGENT_SYSTEM_PROMPT.format(
+        student_profile_json=json.dumps(profile, indent=2)
+    )
+
+    llm_messages = [
+        SystemMessage(content=system_prompt),
+        SystemMessage(content=f"[ANALYZED INTENT]: {json.dumps(intent)}"),
+        SystemMessage(content=f"[STUDENT ANALYSIS]: {json.dumps(student_analysis)}"),
+        SystemMessage(content=f"[TEACHING STRATEGY TO EXECUTE]: {strategy}")
     ]
 
-    if not human_texts:
-        return StudentLevel.UNKNOWN
+    # Append recent conversation history
+    for m in messages[-10:]:
+        llm_messages.append(m)
 
-    combined = " ".join(human_texts)
+    # If active quiz was generated in tool step, append instruction
+    if active_quiz and state.get("message_type") == "quiz":
+        llm_messages.append(SystemMessage(content=f"Administer this quiz formatted beautifully: {json.dumps(active_quiz)}"))
 
-    # Beginner indicators
-    beginner_signals = ["never", "don't know", "no idea", "what is", "new to", "beginner", "just started"]
-    # Advanced indicators
-    advanced_signals = ["already know", "familiar with", "experienced", "working on", "production", "optimize"]
+    response = await llm.ainvoke(llm_messages)
+    teacher_message = _extract_text(response.content)
 
-    beginner_score = sum(1 for s in beginner_signals if s in combined)
-    advanced_score = sum(1 for s in advanced_signals if s in combined)
-
-    if advanced_score > beginner_score:
-        return StudentLevel.ADVANCED
-    elif beginner_score > 0 or len(human_texts) <= 1:
-        return StudentLevel.BEGINNER
-    else:
-        return StudentLevel.INTERMEDIATE
-
-
-def _extract_goal_from_messages(messages: list) -> str:
-    """Extract the student's stated learning goal from messages."""
-    for msg in reversed(messages):
-        if isinstance(msg, HumanMessage) and len(msg.content) > 10:
-            return msg.content[:200]
-    return "General understanding"
-
-
-def _parse_lesson_plan(response_text: str, topic: str) -> list[str]:
-    """Parse numbered list from lesson plan response."""
-    lines = response_text.strip().split("\n")
-    plan = []
-    for line in lines:
-        line = line.strip()
-        if line and (line[0].isdigit() or line.startswith("-")):
-            # Strip numbering and bullets
-            clean = line.lstrip("0123456789.-) ").strip()
-            if clean and len(clean) > 2:
-                plan.append(clean)
-    return plan if plan else [topic]
-
-
-def _assess_correctness(teacher_response: str) -> bool:
-    """Determine if the teacher's evaluation indicates a correct answer."""
-    response_lower = teacher_response.lower()
-    correct_signals = [
-        "correct", "exactly", "well done", "that's right", "perfect",
-        "you got it", "spot on", "great job", "moving forward", "excellent"
-    ]
-    incorrect_signals = [
-        "not quite", "close but", "not exactly", "hint", "try again",
-        "let me", "think about", "almost", "missing"
-    ]
-
-    correct_score = sum(1 for s in correct_signals if s in response_lower)
-    incorrect_score = sum(1 for s in incorrect_signals if s in response_lower)
-
-    return correct_score > incorrect_score
-
-
-def _format_quiz_message(quiz_data: dict) -> str:
-    """Format quiz data into a readable message."""
-    q_type = quiz_data.get("type", "short_answer")
-    question = quiz_data.get("question", "")
-    options = quiz_data.get("options", [])
-
-    msg = f"**Quiz Time!** ({quiz_data.get('difficulty', 'medium').title()} — {quiz_data.get('topic', '')})\n\n"
-    msg += f"{question}\n"
-
-    if q_type == "mcq" and options:
-        msg += "\n"
-        for opt in options:
-            msg += f"  {opt}\n"
-
-    msg += "\nTake your time and type your answer below."
-    return msg
+    return {
+        "messages": [AIMessage(content=teacher_message)],
+        "last_teacher_message": teacher_message,
+        "message_type": state.get("message_type", "text")
+    }

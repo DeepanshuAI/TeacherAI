@@ -10,7 +10,7 @@ export default async function HomePage() {
   // Redirect authenticated users to dashboard
   const session = await auth.api.getSession({ headers: await headers() });
   if (session?.user) {
-    redirect("/dashboard");
+    redirect("/chat");
   }
 
   return <LandingHero />;

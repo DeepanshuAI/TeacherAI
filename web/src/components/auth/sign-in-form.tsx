@@ -6,14 +6,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Eye, EyeOff, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2,Sparkles, AlertCircle } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import { signInSchema, type SignInInput } from "@/lib/validations";
 
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = searchParams.get("callbackUrl") || "/chat";
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
